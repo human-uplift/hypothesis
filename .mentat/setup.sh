@@ -66,7 +66,7 @@ if [ "$ARG1" != "--no-venv" ] && [ "$ARG1" != "--system" ]; then
         
         if [ -d "$VENV_DIR" ]; then
             echo "Activating virtual environment..."
-            # shellcheck disable=SC1090
+            # shellcheck disable=SC1090,SC1091
             source "$VENV_DIR/bin/activate" || {
                 echo "Warning: Failed to activate virtual environment. Continuing with system Python."
             }
