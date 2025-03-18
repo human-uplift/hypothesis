@@ -1,78 +1,107 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -uo pipefail
 
-# Don't use set -e since we want to handle errors gracefully
+echo "Running pre-commit checks..."
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+VENV_DIR="$REPO_ROOT/.venv"
 
-# Find available Python command
-if command -v python3 &> /dev/null; then
-    PYTHON_CMD="python3"
-elif command -v python &> /dev/null; then
-    PYTHON_CMD="python"
-else
-    echo "Error: Could not find Python. Please install Python 3.9+ and try again."
-    exit 1
+# Find the Python executable
+PYTHON_CMD=""
+for cmd in python3 python python3.10 python3.11 python3.12; do
+    if command -v "$cmd" &> /dev/null; then
+        PYTHON_CMD=$(command -v "$cmd")
+        echo "Using Python interpreter: $PYTHON_CMD"
+        break
+    fi
+done
+
+if [ -z "$PYTHON_CMD" ]; then
+    echo "Error: No Python interpreter found. Cannot run tests."
+    # Continue with other checks but skip Python-dependent ones
 fi
 
-echo "Using Python command: $PYTHON_CMD"
-
-# Activate the virtual environment if it exists
-VENV_DIR=".venv"
-if [ -d "$VENV_DIR" ] && [ "$1" != "--no-venv" ]; then
+# Activate the virtual environment if it exists and not explicitly skipped
+if [ -d "$VENV_DIR" ] && [ "$1" != "--no-venv" ] && [ "$1" != "--system" ]; then
     echo "Activating virtual environment..."
     # shellcheck disable=SC1090
     source "$VENV_DIR/bin/activate" || {
         echo "Warning: Failed to activate virtual environment. Using system Python."
     }
+    
+    if [ -n "${VIRTUAL_ENV:-}" ]; then
+        PYTHON_CMD="python"
+        echo "Successfully activated virtual environment at $VIRTUAL_ENV"
+    fi
 fi
 
-# Run basic checks with Python's built-in tools
-echo "Running flake8 equivalent check..."
-"$PYTHON_CMD" -m pyflakes hypothesis-python/src hypothesis-python/tests || {
-    echo "Warning: pyflakes check failed, but continuing..."
+# Check if commands exist before using them
+check_command() {
+    if ! command -v "$1" &> /dev/null; then
+        echo "Warning: $1 is not installed, skipping $2"
+        return 1
+    fi
+    return 0
 }
 
-# Run formatters if ruff is available
-if command -v ruff &> /dev/null; then
-    echo "Running formatters..."
-    ruff format hypothesis-python/src hypothesis-python/tests || {
+# Format code with ruff if available
+if check_command ruff "code formatting"; then
+    echo "Running ruff formatter..."
+    ruff format "$REPO_ROOT/hypothesis-python" || {
         echo "Warning: ruff format failed, but continuing..."
     }
+else
+    echo "Warning: ruff not found. Skipping code formatting."
+    echo "Run '.mentat/setup.sh --with-tools' to install ruff."
+fi
 
-    echo "Running linters..."
-    ruff check --fix hypothesis-python/src hypothesis-python/tests || {
+# Run linters with automatic fixes if available
+if check_command ruff "linting"; then
+    echo "Running ruff linter with auto-fixes..."
+    ruff check --fix "$REPO_ROOT/hypothesis-python" || {
         echo "Warning: ruff check failed, but continuing..."
     }
 else
-    echo "Warning: ruff not found. Skipping code formatting and linting."
-    echo "Run 'setup.sh --with-tools' to install ruff and other development tools."
+    echo "Warning: ruff not found. Skipping linting."
+    echo "Run '.mentat/setup.sh --with-tools' to install ruff."
 fi
 
-# Run type checking if pyright is available
-if command -v pyright &> /dev/null; then
-    echo "Running type checking..."
-    cd hypothesis-python || {
-        echo "Error: Could not find hypothesis-python directory."
-        exit 1
+# Run type checking on the Python code - make it non-fatal
+if check_command pyright "type checking"; then
+    echo "Running pyright type checker..."
+
+    # Create a temporary pyrightconfig.json to ignore vendor files
+    TEMP_CONFIG=$(mktemp)
+    cat > "$TEMP_CONFIG" <<EOF
+{
+  "include": ["src"],
+  "exclude": ["src/hypothesis/vendor/**"],
+  "typeCheckingMode": "strict"
+}
+EOF
+
+    # Run pyright with temp config, but don't fail the script if it errors
+    (cd "$REPO_ROOT/hypothesis-python" && pyright --project "$TEMP_CONFIG" src) || {
+        echo "Warning: Type checking found errors, but continuing with pre-commit checks"
+        echo "Note: Errors in vendor files are expected and can be ignored"
     }
-    
-    pyright || {
-        echo "Warning: pyright check failed, but continuing..."
-    }
-    
-    cd .. || {
-        echo "Error: Failed to return to root directory."
-        exit 1
-    }
+
+    # Clean up temp file
+    rm "$TEMP_CONFIG"
 else
     echo "Warning: pyright not found. Skipping type checking."
-    echo "Run 'setup.sh --with-tools' to install pyright and other development tools."
+    echo "Run '.mentat/setup.sh --with-tools' to install pyright."
 fi
 
-# Run basic tests to ensure code is working
-echo "Running basic tests..."
-"$PYTHON_CMD" -m pytest hypothesis-python/tests/cover/test_simple_strings.py -v || {
-    echo "Warning: Basic tests failed. You might want to fix these issues before committing."
-}
+# Run a minimal set of tests to catch obvious issues
+if [ -n "$PYTHON_CMD" ]; then
+    echo "Running minimal test suite..."
+    (cd "$REPO_ROOT/hypothesis-python" && "$PYTHON_CMD" -m pytest -xvs tests/cover/test_testdecorators.py tests/cover/test_simple_strings.py) || {
+        echo "Warning: Some tests failed, but continuing with pre-commit checks"
+    }
+else
+    echo "Skipping test suite (no Python interpreter found)"
+fi
 
-echo "Precommit checks completed!"
+echo "Pre-commit checks completed!"
 echo "Note: Some checks may have been skipped due to missing dependencies."
-echo "For a complete check, run 'setup.sh --with-tools' to install all development tools."
+echo "For a complete check, run '.mentat/setup.sh --with-tools' to install all development tools."
