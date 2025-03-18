@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-set -uo pipefail
+set -o pipefail
 
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 VENV_DIR="$REPO_ROOT/.venv"
 USE_VENV=false
+
+# Check if any arguments were provided
+ARG1=${1:-""}
+ARG2=${2:-""}
 
 echo "Installing Hypothesis development dependencies..."
 
@@ -51,7 +55,7 @@ fi
 echo "Using Python interpreter: $PYTHON_CMD"
 
 # Create a virtual environment if requested
-if [ "$1" != "--no-venv" ] && [ "$1" != "--system" ]; then
+if [ "$ARG1" != "--no-venv" ] && [ "$ARG1" != "--system" ]; then
     if command -v "$PYTHON_CMD" -m venv &> /dev/null; then
         if [ ! -d "$VENV_DIR" ]; then
             echo "Creating virtual environment in $VENV_DIR..."
@@ -96,7 +100,7 @@ echo "Installing coverage dependencies..."
 $PIP_CMD install --ignore-installed --no-deps -r "$REPO_ROOT/requirements/coverage.txt" || echo "Warning: Some coverage dependencies may not have installed correctly, continuing..."
 
 # Only install tools.txt if explicitly requested
-if [ "$1" = "--with-tools" ] || [ "$2" = "--with-tools" ]; then
+if [ "$ARG1" = "--with-tools" ] || [ "$ARG2" = "--with-tools" ]; then
     echo "Installing tooling dependencies (this may take a while)..."
     $PIP_CMD install --ignore-installed --no-deps -r "$REPO_ROOT/requirements/tools.txt" || echo "Warning: Some tools may not have installed correctly, continuing..."
 fi

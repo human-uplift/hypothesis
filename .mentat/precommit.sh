@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-set -uo pipefail
+set -o pipefail
 
 echo "Running pre-commit checks..."
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 VENV_DIR="$REPO_ROOT/.venv"
+
+# Check if any arguments were provided
+ARG1=${1:-""}
 
 # Find the Python executable
 PYTHON_CMD=""
@@ -21,7 +24,7 @@ if [ -z "$PYTHON_CMD" ]; then
 fi
 
 # Activate the virtual environment if it exists and not explicitly skipped
-if [ -d "$VENV_DIR" ] && [ "$1" != "--no-venv" ] && [ "$1" != "--system" ]; then
+if [ -d "$VENV_DIR" ] && [ "$ARG1" != "--no-venv" ] && [ "$ARG1" != "--system" ]; then
     echo "Activating virtual environment..."
     # shellcheck disable=SC1090
     source "$VENV_DIR/bin/activate" || {
