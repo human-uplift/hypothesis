@@ -272,6 +272,15 @@ def is_a_new_type(thing):
     return isinstance(thing, typing.NewType)
 
 
+def is_a_type_alias(thing):
+    """Return True if thing is a typing.TypeAliasType (in py312+)."""
+    try:
+        # TypeAliasType was introduced in Python 3.12
+        return isinstance(thing, typing.TypeAliasType)
+    except AttributeError:  # pragma: no cover
+        return False
+
+
 def is_a_union(thing: object) -> bool:
     """Return True if thing is a typing.Union or types.UnionType (in py310)."""
     return isinstance(thing, UnionType) or get_origin(thing) is typing.Union

@@ -1261,6 +1261,10 @@ def _from_type(thing: type[Ex]) -> SearchStrategy[Ex]:
                 if strategy is not NotImplemented:
                     return strategy
             return _from_type(thing.__supertype__)
+        if types.is_a_type_alias(thing):
+            # Handle type aliases (type Point = tuple[float, float]) introduced in Python 3.12
+            # Access the underlying type using __value__ attribute
+            return _from_type(thing.__value__)
         # Unions are not instances of `type` - but we still want to resolve them!
         if types.is_a_union(thing):
             args = sorted(thing.__args__, key=types.type_sorting_key)
