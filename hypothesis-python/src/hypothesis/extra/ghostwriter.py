@@ -683,15 +683,41 @@ def _valid_syntax_repr(strategy):
     try:
         if isinstance(strategy, DeferredStrategy):
             strategy = strategy.wrapped_strategy
+        
+        # Only attempt to flatten if this is a OneOfStrategy
         if isinstance(strategy, OneOfStrategy):
+            # Recursively flatten nested one_of strategies
+            def flatten_one_of(strat):
+                if isinstance(strat, DeferredStrategy):
+                    strat = strat.wrapped_strategy
+                if isinstance(strat, OneOfStrategy):
+                    flat_strategies = []
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", SmallSearchSpaceWarning)
+                        strat.element_strategies  # might warn on first access
+                    for s in strat.element_strategies:
+                        # Skip environment variables
+                        if isinstance(s, SampledFromStrategy) and s.elements == (os.environ,):
+                            continue
+                        # Recursively flatten any nested one_of strategies
+                        flat_s = flatten_one_of(s)
+                        if isinstance(flat_s, OneOfStrategy):
+                            flat_strategies.extend(flat_s.element_strategies)
+                        else:
+                            flat_strategies.append(flat_s)
+                    return st.one_of(flat_strategies or st.nothing())
+                return strat
+            
+            # Apply flattening
+            strategy = flatten_one_of(strategy)
+            
+            # De-duplicate strategies
             seen = set()
             elems = []
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", SmallSearchSpaceWarning)
                 strategy.element_strategies  # might warn on first access
             for s in strategy.element_strategies:
-                if isinstance(s, SampledFromStrategy) and s.elements == (os.environ,):
-                    continue
                 if repr(s) not in seen:
                     elems.append(s)
                     seen.add(repr(s))

@@ -33,6 +33,7 @@ from hypothesis.internal.compat import BaseExceptionGroup
 from hypothesis.strategies import builds, from_type, just, lists
 from hypothesis.strategies._internal.core import from_regex
 from hypothesis.strategies._internal.lazy import LazyStrategy
+import hypothesis.strategies as st
 
 varied_excepts = pytest.mark.parametrize("ex", [(), ValueError, (TypeError, re.error)])
 
@@ -129,6 +130,31 @@ def test_flattens_one_of_repr():
     strat = from_type(Union[int, Sequence[int]])
     assert repr(strat).count("one_of(") > 1
     assert ghostwriter._valid_syntax_repr(strat)[1].count("one_of(") == 1
+
+
+def test_flattens_multiple_nested_one_of():
+    # Create a strategy with multiple nested one_of strategies
+    # st.one_of(st.one_of(st.integers(), st.floats()), st.one_of(st.text(), st.booleans()))
+    nested_one_of = st.one_of(
+        st.one_of(st.integers(), st.floats()),
+        st.one_of(st.text(), st.booleans())
+    )
+    
+    # Count how many 'one_of(' are in the original representation
+    original_repr = repr(nested_one_of)
+    assert original_repr.count("one_of(") == 3  # Original has 3 one_of calls
+    
+    # Get the flattened representation
+    _, flattened_repr = ghostwriter._valid_syntax_repr(nested_one_of)
+    
+    # Should only have one 'one_of(' after flattening
+    assert flattened_repr.count("one_of(") == 1
+    
+    # Make sure all the element strategies are still present
+    assert "integers()" in flattened_repr
+    assert "floats()" in flattened_repr
+    assert "text()" in flattened_repr
+    assert "booleans()" in flattened_repr
 
 
 def takes_keys(x: KeysView[int]) -> None:

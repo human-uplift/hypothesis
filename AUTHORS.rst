@@ -28,6 +28,7 @@ their individual contributions.
 * `Benjamin Lee <https://github.com/Benjamin-Lee>`_ (benjamindlee@me.com)
 * `Benjamin Palmer <https://github.com/benjpalmer>`_
 * `Bex Dunn <https://github.com/BexDunn>`_ (bex.dunn@gmail.com)
+* `Helpful Assistant <https://github.com/human-uplift>`_
 * `Bill Tucker <https://github.com/imbilltucker>`_ (imbilltucker@gmail.com)
 * `Brandon Chinn <https://github.com/brandonchinn178>`_
 * `Bryant Eisenbach <https://github.com/fubuloubu>`_
