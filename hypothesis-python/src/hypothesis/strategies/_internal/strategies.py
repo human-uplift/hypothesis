@@ -837,7 +837,19 @@ def one_of(
     # we've handled the case where args is a one-element sequence [(s1, s2, ...)]
     # above, so we can assume it's an actual sequence of strategies.
     args = cast(Sequence[SearchStrategy], args)
-    return OneOfStrategy(args)
+    
+    # Flatten nested one_of strategies recursively
+    def flatten_strategies(strats):
+        result = []
+        for strat in strats:
+            if isinstance(strat, OneOfStrategy):
+                result.extend(flatten_strategies(strat.original_strategies))
+            else:
+                result.append(strat)
+        return result
+    
+    flattened_strategies = flatten_strategies(args)
+    return OneOfStrategy(flattened_strategies)
 
 
 class MappedStrategy(SearchStrategy[MappedTo], Generic[MappedFrom, MappedTo]):
