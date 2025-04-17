@@ -306,57 +306,58 @@ class UniqueSampledListStrategy(UniqueListStrategy):
         return result
 
 
-class FixedKeysDictStrategy(MappedStrategy):
+class FixedKeysDictStrategy(SearchStrategy):
     """A strategy which produces dicts with a fixed set of keys, given a
     strategy for each of their equivalent values.
 
     e.g. {'foo' : some_int_strategy} would generate dicts with the single
     key 'foo' mapping to some integer.
+
+    If optional keys are provided, the generated dictionaries may or may not
+    contain those keys.
     """
 
-    def __init__(self, strategy_dict):
+    def __init__(self, strategy_dict, optional=None):
+        super().__init__()
+        self.required = strategy_dict
         dict_type = type(strategy_dict)
+        self.dict_type = dict_type
+
+        # Create a mapped strategy for the required keys
         self.keys = tuple(strategy_dict.keys())
-        super().__init__(
+        self.fixed = MappedStrategy(
             strategy=TupleStrategy(strategy_dict[k] for k in self.keys),
             pack=lambda value: dict_type(zip(self.keys, value)),
         )
-
-    def calc_is_empty(self, recur):
-        return recur(self.mapped_strategy)
-
-    def __repr__(self):
-        return f"FixedKeysDictStrategy({self.keys!r}, {self.mapped_strategy!r})"
-
-
-class FixedAndOptionalKeysDictStrategy(SearchStrategy):
-    """A strategy which produces dicts with a fixed set of keys, given a
-    strategy for each of their equivalent values.
-
-    e.g. {'foo' : some_int_strategy} would generate dicts with the single
-    key 'foo' mapping to some integer.
-    """
-
-    def __init__(self, strategy_dict, optional):
-        self.required = strategy_dict
-        self.fixed = FixedKeysDictStrategy(strategy_dict)
-        self.optional = optional
+        
+        # Store optional keys if provided
+        self.optional = optional if optional is not None else {}
 
     def calc_is_empty(self, recur):
         return recur(self.fixed)
 
     def __repr__(self):
-        return f"FixedAndOptionalKeysDictStrategy({self.required!r}, {self.optional!r})"
-
+        if not self.optional:
+            return f"FixedKeysDictStrategy({self.required!r})"
+        return f"FixedKeysDictStrategy({self.required!r}, {self.optional!r})"
+        
     def do_draw(self, data):
+        # Draw the fixed part of the dictionary
         result = data.draw(self.fixed)
-        remaining = [k for k, v in self.optional.items() if not v.is_empty]
-        should_draw = cu.many(
-            data, min_size=0, max_size=len(remaining), average_size=len(remaining) / 2
-        )
-        while should_draw.more():
-            j = data.draw_integer(0, len(remaining) - 1)
-            remaining[-1], remaining[j] = remaining[j], remaining[-1]
-            key = remaining.pop()
-            result[key] = data.draw(self.optional[key])
+        
+        # Handle optional keys if present
+        if self.optional:
+            remaining = [k for k, v in self.optional.items() if not v.is_empty]
+            should_draw = cu.many(
+                data, min_size=0, max_size=len(remaining), average_size=len(remaining) / 2
+            )
+            while should_draw.more():
+                j = data.draw_integer(0, len(remaining) - 1)
+                remaining[-1], remaining[j] = remaining[j], remaining[-1]
+                key = remaining.pop()
+                result[key] = data.draw(self.optional[key])
+                
         return result
+
+
+
